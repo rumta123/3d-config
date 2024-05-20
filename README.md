@@ -24,7 +24,5 @@ import { GLTFLoader } from 'GLTFLoader';
 import { RectAreaLightHelper } from 'RectAreaLightHelper'
 import { RectAreaLightUniformsLib } from 'RectAreaLightUniformsLib';
 ```
-Глобальных изменений не произошло. Я изменил только импорты и свет. Для света я использовал RectAreaLight. В стоке он плохо светит и можно сказать не освещает модель совесем, поэтому подгружаем из three js - RectAreaLightUniformsLib. Для его работы нужно всего лишь его инициализировать:
-```js
-RectAreaLightUniformsLib.init();
+
 ```
