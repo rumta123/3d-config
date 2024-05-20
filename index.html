@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Include html2pdf.js library -->
+    <script src="https://rawgit.com/eKoopmans/html2pdf/master/dist/html2pdf.bundle.js"></script>
+
+    <title>THREE JS - Lesson</title>
+</head>
+
+
+
+<body>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            overflow: hidden;
+            margin: 0;
+        }
+
+        /* Remove margin */
+        .container {
+            width: 100%;
+            height: 100vh;
+        }
+
+        nav {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1;
+        }
+
+        nav a {
+            text-decoration: none;
+            color: white;
+            margin-right: 20px;
+            font-size: 18px;
+            cursor: pointer;
+        }
+
+        nav select {
+            margin-right: 20px;
+            font-size: 18px;
+        }
+    </style>
+
+    <nav>
+        <a href="#" onclick="changeView('front')">Front View</a>
+        <a href="#" onclick="changeView('top')">Top View</a>
+        <a href="#" onclick="changeView('side')">Side View</a>
+
+        <label for="colorPicker">Model Color:</label>
+        <input type="color" id="colorPicker" onchange="changeModelColor(this.value)">
+
+        <label for="model1Checkbox1">Show Model 1 - Part 1</label>
+        <input type="checkbox" id="model1Checkbox1" checked onchange="toggleModelPartVisibility(0, 0)">
+        <label for="model1Checkbox2">Show Model 1 - Part 2</label>
+        <input type="checkbox" id="model1Checkbox2" checked onchange="toggleModelPartVisibility(0, 1)">
+
+        <label for="model1Checkbox2">Show Model 1 - Part 3</label>
+        <input type="checkbox" id="model1Checkbox2" checked onchange="toggleModelPartVisibility(0, 2)">
+
+        <label for="model1Checkbox2">Show Model 1 - Part 4</label>
+        <input type="checkbox" id="model1Checkbox2" checked onchange="toggleModelPartVisibility(0, 3)">
+
+
+        <!-- вторая часть -->
+       
+
+        <label for="model1Checkbox1">Show Model 2 - Part 1</label>
+        <input type="checkbox" id="model1Checkbox1" checked onchange="toggleModelPartVisibility(1, 0)">
+        <label for="model1Checkbox2">Show Model 2 - Part 2</label>
+        <input type="checkbox" id="model1Checkbox2" checked onchange="toggleModelPartVisibility(1, 1)">
+
+        <label for="model1Checkbox2">Show Model 2 - Part 3</label>
+        <input type="checkbox" id="model1Checkbox2" checked onchange="toggleModelPartVisibility(1, 2)">
+
+        <label for="model1Checkbox2">Show Model 2 - Part 4</label>
+        <input type="checkbox" id="model1Checkbox2" checked onchange="toggleModelPartVisibility(1, 3)">
+    </nav>
+
+    <div class="container"></div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "./node_modules/three/build/three.module.js",
+                "OrbitControls": "./node_modules/three/examples/jsm/controls/OrbitControls.js",
+                "STLLoader": "./node_modules/three/examples/jsm/loaders/STLLoader.js",
+                "RectAreaLightHelper": "./node_modules/three/examples/jsm/helpers/RectAreaLightHelper.js",
+                "RectAreaLightUniformsLib": "./node_modules/three/examples/jsm/lights/RectAreaLightUniformsLib.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+
+        import * as THREE from 'three';
+        import { OrbitControls } from 'OrbitControls';
+        import { STLLoader } from 'STLLoader';
+        import { RectAreaLightHelper } from 'RectAreaLightHelper'
+        import { RectAreaLightUniformsLib } from 'RectAreaLightUniformsLib';
+
+
+        let modelMaterial; // Declare modelMaterial globally
+
+// Объявите массив для хранения объектов моделей и их частей
+const models = [];
+
+function toggleModelPartVisibility(modelIndex, partIndex) {
+    if (models[modelIndex] && models[modelIndex][partIndex]) {
+        models[modelIndex][partIndex].visible = !models[modelIndex][partIndex].visible;
+    }
+}
+
+
+let modelMaterialColor = 0xffffff; // Initial color
+
+function changeModelColor(color) {
+    modelMaterialColor = parseInt(color.replace("#", "0x"), 16);
+
+    // Update the color of all loaded models
+    models.forEach(modelParts => {
+        modelParts.forEach(part => {
+            part.material.color.set(modelMaterialColor);
+        });
+    });
+}
+
+function init() {
+    let container = document.querySelector('.container');
+
+    // Scene
+    const scene = new THREE.Scene()
+    scene.background = new THREE.Color("#E2DFE1");
+
+    // Camera
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 3000);
+    camera.position.set(0, 10, -1)
+    camera.lookAt(0, 0, 0);
+
+    // Renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true })
+    renderer.setSize(window.innerWidth, window.innerHeight)
+    container.appendChild(renderer.domElement)
+
+    // Plane
+    let plane;
+    {
+        plane = new THREE.Mesh(
+            new THREE.PlaneGeometry(1000, 1000),
+            new THREE.MeshBasicMaterial({ color: "#E2DFE1" })
+        )
+        plane.receiveShadow = true;
+        plane.position.set(0, -1, 0)
+        plane.rotateX(-Math.PI / 2);
+        scene.add(plane)
+    }
+
+    // Models
+    const modelPaths = ['./model/1/1.stl', './model/1/2.stl', ];
+    const loader = new STLLoader();
+
+    modelPaths.forEach((modelPath, modelIndex) => {
+        const modelParts = [];
+
+        // Загрузите каждую часть модели
+        for (let partIndex = 0; partIndex < 4; partIndex++) {
+            loader.load(modelPath.replace('.stl', `-${partIndex + 1}.stl`), geometry => {
+                const material = new THREE.MeshStandardMaterial({  color: modelMaterialColor,  metalness: 0.5, roughness: 0.5 });
+              
+                if (modelIndex === 1 && (partIndex === 2 || partIndex === 3)) {
+    material.color.set(0x00ff00); // Здесь устанавливаем зеленый цвет
+}
+
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.scale.set(0.0001, 0.0001, 0.0001);
+                mesh.position.set(0, 1, 0); // Установите все модели в одну плоскость
+                mesh.rotation.set(0, 0, Math.PI);
+
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+
+                // Добавьте модель в массив частей модели
+                modelParts.push(mesh);
+
+                // Добавьте модель в сцену (если хотите видеть ее изначально)
+                scene.add(mesh);
+            });
+        }
+
+        // Добавьте массив частей модели в массив моделей
+        models.push(modelParts);
+    });
+
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0x404040, 2);
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.position.set(0.5, 1, 0.5).normalize();
+    scene.add(directionalLight);
+
+    RectAreaLightUniformsLib.init();
+
+    const rectLight = new THREE.RectAreaLight(0xffffff, 1, 100, 100);
+    rectLight.position.set(2, 0.5, 0.5);
+    rectLight.lookAt(0, 0, 0);
+    scene.add(rectLight);
+
+    // OrbitControls
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.autoRotate = false;
+    controls.autoRotateSpeed = 0;
+    controls.enableDamping = true;
+
+    // Resize
+    window.addEventListener('resize', onWindowResize, false)
+
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight)
+    }
+
+    // Animate
+    function animate() {
+        requestAnimationFrame(animate);
+
+        controls.target.set(0, 0, 0);
+
+        controls.update();
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    // Function to change the camera view
+    window.changeView = function (view) {
+        switch (view) {
+            case 'front':
+                camera.position.set(0, 10, -1);
+                camera.lookAt(0, 0, 0);
+                break;
+            case 'top':
+                camera.position.set(0, 0, -10);
+                camera.lookAt(0, 0, 0);
+                break;
+            case 'side':
+                camera.position.set(-10, 0, 0);
+                camera.lookAt(0, 0, 0);
+                break;
+            default:
+                break;
+        }
+    }
+
+    // Function to change the visibility of model parts
+    window.toggleModelPartVisibility = toggleModelPartVisibility;
+
+      // Function to change the color of the models
+      window.changeModelColor = changeModelColor;
+}
+
+init();  // вызываем функцию инициализации сразу после определения
+
+    </script>
+</body>
+
+</html>

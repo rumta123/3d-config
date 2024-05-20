@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Include html2pdf.js library -->
+    <script src="https://rawgit.com/eKoopmans/html2pdf/master/dist/html2pdf.bundle.js"></script>
+
+    <title>THREE JS - Lesson</title>
+</head>
+
+<body>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            overflow: hidden;
+            margin: 0;
+        }
+
+        /* Remove margin */
+        .container {
+            width: 100%;
+            height: 100vh;
+        }
+
+        nav {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1;
+        }
+
+        nav a {
+            text-decoration: none;
+            color: white;
+            margin-right: 20px;
+            font-size: 18px;
+            cursor: pointer;
+        }
+
+        nav select {
+            margin-right: 20px;
+            font-size: 18px;
+        }
+    </style>
+
+    <nav>
+        <a href="#" onclick="changeView('front')">Front View</a>
+        <a href="#" onclick="changeView('top')">Top View</a>
+        <a href="#" onclick="changeView('side')">Side View</a>
+
+        <label for="colorPicker">Model Color:</label>
+        <input type="color" id="colorPicker" onchange="changeModelColor(this.value)">
+        <!-- <button onclick="captureAndSave()">Сохранить в пдф</button> -->
+    </nav>
+
+    <div class="container"></div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.139.0/build/three.module.js",
+                "OrbitControls": "https://unpkg.com/three@0.139.0/examples/jsm/controls/OrbitControls.js",
+                "OBJLoader": "https://unpkg.com/three@0.139.0/examples/jsm/loaders/OBJLoader.js",
+                "RectAreaLightHelper": "https://unpkg.com/three@0.139.0/examples/jsm/helpers/RectAreaLightHelper.js",
+                "RectAreaLightUniformsLib": "https://unpkg.com/three@0.139.0/examples/jsm/lights/RectAreaLightUniformsLib.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+
+        import * as THREE from 'three';
+        import { OrbitControls } from 'OrbitControls';
+        import { OBJLoader } from 'OBJLoader';
+        import { RectAreaLightHelper } from 'RectAreaLightHelper'
+        import { RectAreaLightUniformsLib } from 'RectAreaLightUniformsLib';
+
+        let modelMaterial; // Declare modelMaterial globally
+        window.changeModelColor = function (color) {
+            if (modelMaterial) {
+                modelMaterial.color.setStyle(color);
+            } else {
+                console.error("modelMaterial is not defined!");
+            }
+        }
+
+        // function captureAndSave() {
+
+        //     const container = document.querySelector('.container');
+
+        //     html2pdf(container);
+        // }
+        function init() {
+            let container = document.querySelector('.container');
+
+            // Scene
+            const scene = new THREE.Scene()
+            scene.background = new THREE.Color("#E2DFE1");
+
+            // Camera
+            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 3000);
+            camera.position.set(0, 10, -1)
+            camera.lookAt(0, 0, 0);
+
+            // Renderer
+            const renderer = new THREE.WebGLRenderer({ antialias: true })
+            renderer.setSize(window.innerWidth, window.innerHeight)
+            container.appendChild(renderer.domElement)
+
+            // Plane
+            let plane;
+            {
+                plane = new THREE.Mesh(
+                    new THREE.PlaneGeometry(1000, 1000),
+                    new THREE.MeshBasicMaterial({ color: "#E2DFE1" })
+                )
+                plane.receiveShadow = true;
+                plane.position.set(0, -1, 0)
+                plane.rotateX(-Math.PI / 2);
+                scene.add(plane)
+            }
+
+
+            // Model
+            {
+                const loader = new OBJLoader();
+                loader.load('./model/1.obj', obj => {
+                    obj.scale.set(0.0001, 0.0001, 0.0001);
+                    obj.position.set(0, 0, Math.PI);
+                    obj.rotation.set(0, 0, Math.PI);
+
+                    // Traverse the object and find the first mesh to get its material
+                    obj.traverse(child => {
+                        if (child instanceof THREE.Mesh && !modelMaterial) {
+                            modelMaterial = child.material;
+                            child.castShadow = true;
+                            child.receiveShadow = true;
+                        }
+                    });
+
+                    // Create a new material with initial color
+                    const initialColor = 0xffffff;
+                    const newMaterial = new THREE.MeshStandardMaterial({ color: initialColor, metalness: 0.5, roughness: 0.5 });
+
+                    // const newMaterial = new THREE.MeshPhongMaterial({ color: initialColor, specular: 0x111111, shininess: 20 });
+
+                    // Apply the new material to all meshes if not already assigned
+                    obj.traverse(child => {
+                        if (child instanceof THREE.Mesh && !child.material) {
+                            child.material = newMaterial;
+                        }
+                    });
+
+                    obj.autoUpdate = true;
+                    scene.add(obj);
+                    // Output the bounding box size of the model
+                    const boundingBox = new THREE.Box3().setFromObject(obj);
+                    const size = boundingBox.getSize(new THREE.Vector3());
+                    console.log('Bounding Box Size of the model:', size.x * 1000, size.y * 1000, size.z * 1000);
+
+                    // Output the number of meshes/parts in the model
+                    const numberOfMeshes = countMeshes(obj);
+                    console.log('Number of Meshes in the model:', numberOfMeshes);
+                },
+                    function (xhr) {
+                        console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+                    },
+                    function (error) {
+                        console.error('Error loading model:', error);
+                    });
+            }
+
+            // Function to count the number of meshes in the model
+            function countMeshes(obj) {
+                let count = 0;
+
+                obj.traverse(child => {
+                    if (child instanceof THREE.Mesh) {
+                        count++;
+                    }
+                });
+
+                return count;
+            }
+            // Lights
+            {
+                const ambientLight = new THREE.AmbientLight(0x404040, 2); // Ambient light
+                scene.add(ambientLight);
+
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+                directionalLight.position.set(0.5, 1, 0.5).normalize(); // Directional light
+                scene.add(directionalLight);
+
+                RectAreaLightUniformsLib.init();
+
+                const rectLight = new THREE.RectAreaLight(0xffffff, 1, 100, 100);
+                rectLight.position.set(1, 1, 1);
+                rectLight.lookAt(0, 0, 0);
+                scene.add(rectLight);
+            }
+
+            // OrbitControls
+            const controls = new OrbitControls(camera, renderer.domElement);
+            controls.autoRotate = false;
+            controls.autoRotateSpeed = 0;
+            // отвечает за плавность
+            controls.enableDamping = true;
+
+            // Resize
+            window.addEventListener('resize', onWindowResize, false)
+
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight)
+            }
+
+            // Animate
+            function animate() {
+                requestAnimationFrame(animate);
+
+                // Добавьте эту строку
+                controls.target.set(0, 0, 0);
+
+                controls.update();
+                renderer.render(scene, camera);
+            }
+            animate()
+
+
+
+            // Function to change the camera view
+            window.changeView = function (view) {
+                switch (view) {
+                    case 'front':
+                        camera.position.set(0, 10, -1);
+                        camera.lookAt(0, 0, 0);
+                        break;
+                    case 'top':
+                        camera.position.set(0, 0, -10);
+                        camera.lookAt(0, 0, 0);
+                        break;
+                    case 'side':
+                        camera.position.set(-10, 0, 0);
+                        camera.lookAt(0, 0, 0);
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+
+        init()
+    </script>
+</body>
+
+</html>
